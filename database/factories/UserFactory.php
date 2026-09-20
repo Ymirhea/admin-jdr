@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -56,5 +57,20 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => encrypt(json_encode(['recovery-code-1'])),
             'two_factor_confirmed_at' => now(),
         ]);
+    }
+
+    public function admin(): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->assignRole(Role::Admin->value));
+    }
+
+    public function superadmin(): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->assignRole(Role::Superadmin->value));
+    }
+
+    public function gameMaster(): static
+    {
+        return $this->afterCreating(fn (User $user) => $user->assignRole(Role::GameMaster->value));
     }
 }
