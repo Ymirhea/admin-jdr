@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -60,5 +61,76 @@ class User extends Authenticatable implements PasskeyUser
         return Str::length($initials) > 1
             ? Str::substr($initials, 0, 1).Str::substr($initials, -1)
             : $initials;
+    }
+
+    public function canBeModifiedBy(User $actor): bool
+    {
+        if ($actor->is($this)) {
+            return true;
+        }
+
+        $subjectRole = $this->roles->first()?->name;
+
+        if ($subjectRole === Role::Superadmin->value) {
+            return false;
+        }
+
+        if ($subjectRole === Role::Admin->value) {
+            return $actor->hasRole(Role::Superadmin->value);
+        }
+
+        return $actor->hasRole(Role::Admin->value) || $actor->hasRole(Role::Superadmin->value);
+    }
+
+    public function canBeDeletedBy(User $actor): bool
+    {
+        if ($actor->is($this)) {
+            return false;
+        }
+
+        return $this->canBeModifiedBy($actor);
+    }
+
+    public function modificationDenialKeyFor(User $actor): ?string
+    {
+        if ($this->canBeModifiedBy($actor)) {
+            return null;
+        }
+
+        return $this->roleManagementDenialKey('modify');
+    }
+
+    public function deletionDenialKeyFor(User $actor): ?string
+    {
+        if ($actor->is($this)) {
+            return 'You cannot delete your own account.';
+        }
+
+        if ($this->canBeDeletedBy($actor)) {
+            return null;
+        }
+
+        return $this->roleManagementDenialKey('delete');
+    }
+
+    private function roleManagementDenialKey(string $action): string
+    {
+        $subjectRole = $this->roles->first()?->name;
+
+        if ($subjectRole === Role::Superadmin->value) {
+            return $action === 'delete'
+                ? 'A superadmin can only be deleted by themselves.'
+                : 'A superadmin can only be modified by themselves.';
+        }
+
+        if ($subjectRole === Role::Admin->value) {
+            return $action === 'delete'
+                ? 'An admin can only be deleted by themselves or a superadmin.'
+                : 'An admin can only be modified by themselves or a superadmin.';
+        }
+
+        return $action === 'delete'
+            ? 'You cannot delete this user with your role.'
+            : 'You cannot modify this user with your role.';
     }
 }
